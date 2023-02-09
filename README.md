@@ -2,10 +2,14 @@
 ------------------------------------------
 ###### 百度网盘批量转存工具
 
+​	超过500转存限制后，逐个保存子文件夹文件（仅一层，未递归
+
 `python3  BaiduFilesTransfers_Pro.py`
 
 `文件名`   --指本人网盘转存的文件夹名（默认根路径 /）
+
 `cookie`  --网盘登录的cookie
+
 `网盘链接`  --格式如  					
 
 - https://pan.baidu.com/s/XXX_XXXX-XXXXXXX提取码: 2ejd
