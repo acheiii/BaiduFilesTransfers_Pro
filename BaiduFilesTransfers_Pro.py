@@ -85,57 +85,42 @@ def check_links(link_url, pass_code, bdstoken):
     else:
         return [shareid_list[0], user_id_list[0], fs_id_list, server_filedir[0]]
 
-
-# 转存文件函数
-def transfer_files(check_links_reason, dir_name, bdstoken):
-    url = 'https://pan.baidu.com/share/transfer?shareid=' + check_links_reason[0] + '&from=' + check_links_reason[1] + '&bdstoken=' + bdstoken + '&channel=chunlei&web=1&clienttype=0'
-    
-    fs_id = ','.join(i for i in check_links_reason[2])
-    post_data = {'fsidlist': '[' + fs_id + ']', 'path': '/' + dir_name, }
-    print(post_data, url)
-    response = s.post(url=url, headers=request_header, data=post_data, timeout=15, allow_redirects=False, verify=False)
-    return response.json()['errno']
-
 # 获取父目录下所以子文件夹及子文件
-#https://pan.baidu.com/share/list?uk=xxxxx&shareid=xxxxxxx&order=other&desc=1&showempty=0&web=1&page=1&num=100&dir=%2Fsecutity%2F
 def get_parentPath_and_subfiledir_subfile(user_id_list, shareid_list, parentPath, cookie):
     fs_id_list = []
     try:
         print("开始获取父目录")
-        for page  in range(1,100):       
+        for page in range(1, 100):
             page = str(page)
             url = "https://pan.baidu.com/share/list?uk=" + user_id_list + "&shareid=" + shareid_list + "&order=other&desc=1&showempty=0&web=1&page=" + page + "&num=100&dir=%2F" + parentPath + "%2F"
-            rsp = s.get(url=url, headers=request_header,  verify=False)
+            rsp = s.get(url=url, headers=request_header, verify=False)
             print(url)
-            fs_id = re.findall('"fs_id":(\\d*)',rsp.text)
+            fs_id = re.findall('"fs_id":(\\d*)', rsp.text)
             fs_id_list.extend(fs_id)
-            if rsp.status_code != 200  or ('fs_id' not in rsp.text):
+            if rsp.status_code != 200 or ('fs_id' not in rsp.text):
                 return fs_id_list
+            if len(fs_id_list) > 500:
+                print("转存文件数量超过500，开始递归")
+                sub_file_list = get_parentPath_and_subfiledir_subfile(user_id_list, shareid_list, parentPath, cookie)
+                if sub_file_list:
+                    fs_id_list.extend(sub_file_list)
+                break
     except Exception as e:
-        print("获取父子目录出错",e)
+        print("获取父子目录出错", e)
+    return fs_id_list
+
 
 # 多次转存文件函数
 @retry(stop_max_attempt_number=10, wait_fixed=1000)
 def sub_transfer_files(shareid, user_id, bdstoken, fs_id_list, dir_name):
     url = 'https://pan.baidu.com/share/transfer?shareid=' + shareid + '&from=' + user_id + '&bdstoken=' + bdstoken + '&channel=chunlei&web=1&clienttype=0'
-    
+
     fs_id = ''.join(fs_id_list)
     post_data = {'fsidlist': '[' + fs_id + ']', 'path': '/' + dir_name, }
     print(post_data, url)
     response = s.post(url=url, headers=request_header, data=post_data, timeout=25, allow_redirects=False, verify=False)
     return response.json()['errno']
 
-# # 多线程
-# def thread_it(func, *args):
-#     t = threading.Thread(target=func, args=args, daemon=True)
-#     t.start()
-#     # t.join()
-
-# 检测链接种类
-def check_link_type(link_list_line):
-    if link_list_line.find('https://pan.baidu.com/s/') >= 0:
-        link_type = '/s/'
-    return link_type
 
 # 新建目录函数
 def create_dir(dir_name, bdstoken):
@@ -145,6 +130,22 @@ def create_dir(dir_name, bdstoken):
     print(post_data)
     return response.json()['errno']
 
+# 转存文件函数
+def transfer_files(check_links_reason, dir_name, bdstoken):
+    url = 'https://pan.baidu.com/share/transfer?shareid=' + check_links_reason[0] + '&from=' + check_links_reason[1] + '&bdstoken=' + bdstoken + '&channel=chunlei&web=1&clienttype=0'
+
+    fs_id = ','.join(i for i in check_links_reason[2])
+    post_data = {'fsidlist': '[' + fs_id + ']', 'path': '/' + dir_name, }
+    print(post_data, url)
+    response = s.post(url=url, headers=request_header, data=post_data, timeout=15, allow_redirects=False, verify=False)
+    return response.json()['errno']
+
+#检测链接种类
+def check_link_type(link_list_line):
+    if link_list_line.find('https://pan.baidu.com/s/') >= 0:
+        link_type = '/s/'
+    return link_type
+
 # 主程序
 def main():
     # 获取和初始化数据
@@ -152,9 +153,7 @@ def main():
     cookie = "".join(input('\033[2;32m输入cookie: \033[0m\n'))
     request_header['Cookie'] = cookie
     link_url = "".join(input('\033[2;32m输入网盘链接: 例如https://pan.baidu.com/s/1fcW_xxxxxxxxxxxxxxx 提取码: 2ejd \n\r\r\r\t 或者 https://pan.baidu.com/s/1fcW_U-AYdXXXX-XXXX  2ejd\033[0m\n'))
-    # pass_code = "".join(input('\033[2;32m输入网盘密码: \033[0m\n'))
-    # pass_code = "2ejd"
-
+    # 开始运行函数
     # 开始运行函数
     try:
         # 检查cookie输入是否正确
@@ -174,13 +173,6 @@ def main():
         if type(dir_list_json) != list:
             print('没获取到网盘目录列表,请检查cookie和网络后重试.' + '\n')
             sys.exit()
-
-        # shareid_list, user_id_list, fs_id_list, server_filedir=check_links(link_url, pass_code, bdstoken)
-        # check_links_results=check_links(link_url, pass_code, bdstoken)
-        # shareid_list=check_links_results[0] 
-        # user_id_list=check_links_results[1]
-        # fs_id_list=check_links_results[2]   
-        # server_filedir=check_links_results[3]   
         # 执行新建目录
         dir_list = [dir_json['server_filename'] for dir_json in dir_list_json]
         if dir_name and dir_name not in dir_list:
@@ -203,26 +195,8 @@ def main():
             link_url_org, pass_code_org = re.sub(r'提取码*[：:](.*)', r'\1', link_url.lstrip()).split(' ', maxsplit=1)
             [link_url, pass_code] = [link_url_org.strip()[:47], pass_code_org.strip()[:4]]
             shareid_list,user_id_list,fs_id_list,server_filedir = check_links(link_url, pass_code, bdstoken)
-
             # 执行检查链接有效性
             check_links_reason = check_links(link_url, pass_code, bdstoken)
-        #     if check_links_reason == 1:
-        #         print('链接失效,没获取到shareid:' + link_url + '\n')
-        #     elif check_links_reason == 2:
-        #         print('链接失效,没获取到user_id:' + link_url + '\n')
-        #     elif check_links_reason == 3:
-        #         print('链接失效,没获取到fs_id:' + link_url + '\n')
-        #     elif check_links_reason == '百度网盘-链接不存在':
-        #         print('链接失效,文件已经被删除或取消分享:' + link_url + '\n')
-        #     elif check_links_reason == '百度网盘 请输入提取码':
-        #         print('链接错误,缺少提取码:' + link_url + '\n')
-        #     elif check_links_reason == -12:
-        #         print('链接错误,提取码错误:' + link_url + '\n')
-        #     elif check_links_reason == -62:
-        #         print('链接错误尝试次数过多,请手动转存或稍后再试:' + link_url + '\n')
-        #     elif check_links_reason == 105:
-        #         print('链接错误,链接格式不正确:' + link_url + '\n')
-        #     elif isinstance(check_links_reason):
             # 执行转存文件
             transfer_files_reason = transfer_files(check_links_reason, dir_name, bdstoken)
             if transfer_files_reason == 0:
@@ -242,32 +216,11 @@ def main():
                         time.sleep(round(random.uniform(0.001, 5.01), 3))
                         print(fs_id_list,"sleeptime: ",round(random.uniform(0.001, 5.01), 3))
                         sub_transfer_files(shareid_list,user_id_list, bdstoken, fs_id_list, dir_name)
-                        
-
             else:
                 print('转存失败,错误代码(' + str(transfer_files_reason) + '):' + link_url + '\n')
+
         else:
             print('访问链接返回错误代码(' + str(check_links_reason) + '):' + link_url + '\n')
-
-    #         transfer_files_reason = transfer_files_rapid(rapid_data, dir_name, bdstoken)
-    #         if transfer_files_reason == 0:
-    #             print('转存成功:' + url_code + '\n')
-    #         elif transfer_files_reason == -8:
-    #             print('转存失败,目录中已有同名文件或文件夹存在:' + url_code + '\n')
-    #         elif transfer_files_reason == -9:
-    #             print('验证已过期,请重新获取cookie:' + url_code + '\n')
-    #         elif transfer_files_reason == 404:
-    #             print('转存失败,秒传无效:' + url_code + '\n')
-    #         elif transfer_files_reason == -10:
-    #             print('转存失败,容量不足:' + url_code + '\n')
-    #         elif transfer_files_reason == 2:
-    #             print('转存失败,请重试:' + url_code + '\n')
-    #         else:
-    #             print('转存失败,错误代码(' + str(transfer_files_reason) + '):' + url_code + '\n')
-    #     elif link_type == 'unknown':
-    #         print('不支持链接:' + url_code + '\n')
-    #     task_count = task_count + 1
-    #     label_state_change(state='running', task_count=task_count, task_total_count=task_total_count)
     except Exception as e:
         print('运行出错,请重新运行本程序.错误信息如下:' + '\n')
         print(str(e) + '\n')
