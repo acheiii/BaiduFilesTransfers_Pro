@@ -190,6 +190,8 @@ def main():
         link_url = link_url.replace("https://pan.baidu.com/share/init?surl=", "https://pan.baidu.com/s/1")
         # 判断连接类型
         link_type = check_link_type(link_url)
+        # 链接有效性
+        check_links_reason = ""
         # 处理(https://pan.baidu.com/s/1tU58ChMSPmx4e3-kDx1mLg 123w)格式链接
         if link_type == '/s/':
             link_url_org, pass_code_org = re.sub(r'提取码*[：:](.*)', r'\1', link_url.lstrip()).split(' ', maxsplit=1)
